@@ -4,14 +4,14 @@
 
 ### Prerequisities
 Following modules should be installed and available in your python environment:
-- graphviz
-- ordered-set
+- `graphviz`
+- `ordered-set`
 
-1. Clone the code with: `git clone https://redmine.ktiml.mff.cuni.cz/dck-project/dck-learning.git`
-2. git checkout fsa
+1. Clone the code with: ```git clone https://github.com/fairf4x/dcklearn.git```
+2. git checkout main
 
 The main program may be tested by running:
-    python learnFSA.py -h
+    ```python learnFSA.py -h```
 
 ## Usage
 
@@ -23,9 +23,10 @@ Plans are text files with one action per line in the following format:
 
 These actions are used for learning a FSA.
 
-We can render resulting FSA diagram using `FILENAME` and `FORMAT` (only `png`,`svg` and `pdf` are supported. Textual graphviz format for further machine processing is `gv`):
+We can render resulting FSA diagram using `FILENAME` and `FORMAT` (only `png`,`svg` and `pdf` are supported).
+Textual graphviz format for further machine processing is `gv`):
 
-    python learnFSA.py -p PLANDIRPATH -o FILENAME -f FORMAT
+    ```python learnFSA.py -p PLANDIRPATH -o FILENAME -f FORMAT```
 
 Resulting FSA diagram should be stored as `dck_test.cairo.cairo.png` in current directory.
 
@@ -40,24 +41,30 @@ If we want to merge learned FSA with existing PDDL domain, we need to specify bo
 
 The algorithm works recursively with sets of plans in order to build a special tree structure which is then used to build the resulting regular expression.
 
-Input always consists of a finite set of plans. All these plans are then splitted into three sections. Every split decision is represented as a node in a tree structure.
+Input always consists of a finite set of plans. All these plans are then splitted into three plan sets (called Head, Middle and Tail). Every split decision is represented as a node in a tree structure. The decision is made by choosing a *split action*.
+For example if the plan is (shortened for readability - each letter represents one action):
+
+p = BCABDABCABDC
+
+and we choose split action A, we get:
+
+Head(p) = {BC}
+Middle(p) = {BD,BC}
+Tail(p) = {BDC}
+
+Each set thus contain fragments of the original plan without selected split action. If we split all plans from the input set (all plans in the input directory) in similar manner we can get lists of all Head, Middle and Tail plans that are used as an input for subsequent recursive steps.
 
 There are following special cases for tree nodes:
 
-1. Non trivial node represents split of all the plans using an action A_s into three sets of plans P.
-e.g. one plan p = ABCACBDADABB can be split into three sets of plans called Head, Middle and Tail using the split action A_s = A:
-Head(p) = {}
-Middle(p) = {BC,CBD,D}
-Tail(p) = BB
+1. Non-trivial node represents split of all the plans using an action `a` into three sets of plans.
+After spliting all plans from the input set of plans P (|P| = N), the result of the split with the split action `a` is:
+HeadList(a) = Union{ Head(P1),..., Head(PN) }
+MiddleList(a) = Union{ Middle(P1),..., Middle(PN) }
+TailList(a) = Union{ Tail(P1),..., Tail(PN) }
 
-After spliting all plans from the input set of plans P (|P| = N), the result of the split with the action A_s is:
-HeadList(A_s) = Union{ Head(P1),..., Head(PN) }
-MiddleList(A_s) = Union{ Middle(P1),..., Middle(PN) }
-TailList(A_s) = Union{ Tail(P1),..., Tail(PN) }
+Every such node has at most three children (one for each XList(a)). The node is called non-trivial iff at least one of them can be recursively processed further yielding more complex structures.
 
-Every such node has at most three children (for each XList(A_s) such that at least one of them can be recursively processed further yielding more complex structures.
-
-2. Trivial node is such that all siblings HeadList(A_s), MiddleList(A_s), TailList(A_s) are just sets of actions.
+2. Trivial node is a node where all siblings HeadList(a), MiddleList(a), TailList(a) are just sets of actions.
    This kind of node has no siblings for further processing.
    It records only information about short subplan consisting from the actions from its sibling sets and its own split action.
 
@@ -80,16 +87,45 @@ On each level the ```selectTopSubset``` function is called with some scoring fun
 
 ### Pattern generation ###
 
+Each plan has its pattern that describe positions of symbols used as action arguments.
+For short plan fragment:
+```
+    ('lift', ('h1', 'c1', 's1', 'p1'))
+    ('load', ('h1', 'c1', 't1', 'p1'))
+```
+
+we can have pattern:
+```
+A = ['lift','load']
+E = [{(1, 0), (0, 0)}, {(0, 1), (1, 1)}, {(0, 3), (1, 3)}]
+```
+
+The list A contain only action names.
+The list E contain sets that represent sets of equivalence. It contain pairs of indices where firt index represent position of an action from the first list and the second index marks position of its argument. Everything is indexed starting from zero.
+e.g.:
+```
+{(1, 0), (0, 0)}
+```
+**h1** is in action A[1] at position 0 and at A[0] at position 0.  
+
+These patterns are independent of any argument names which may be different in each plan.
+
+
 ### FSA merging to PDDL (FSA.py)
 
 FSA is initialized from stack of symbols produced by ```learnFSA.py``` module.
 Four kinds of items can be found on the stack:
 
-1. action with arguments
-2. set of actions
-3. parenthesis
-4. repetition symbols
+1. action with arguments - tuple `('actionName',['arg1','arg2',...,'argN'])`
+   lambda action names should begin with prefix `_`
+   This is interpreted as a new FSA transition starting in last state and ending in a new state.
+2. action set - set of strings which is interpreted as a set of loops in last state (one loop for each action from the set)
+3. parenthesis - either `(` or `)`. Modifies stack used for FSA creation.
+4. repetition symbol - `*`,`+` or `[:number:]`. In this case previous action (or group of action in parenthesis) on the stack is repeated.
 
-Merging to PDDL depends on external module pyddl (reading and writing PDDL files).
+
+### Merging learned FSA to PDDL
+
+Merging to PDDL depends on external module ```pyddl``` (reading and writing PDDL files).
 Original domain PDDL file is needed. The file is read and the domain is cloned.
 Then the clone actions are updated according to FSA transitions.
