@@ -9,8 +9,7 @@ import refle
 from FSA import *
 
 def main():
-#    usage = "usage: %prog -p PLANDIR [-r RE] [-o OUT -f FORMAT] [-m DOMAIN]"
-    usage = "usage: %prog -p PLANDIR [-r RE] [-o OUT -f FORMAT]"
+    usage = "usage: %prog -p PLANDIR [-r RE] [-o OUT -f FORMAT] [-m DOMAIN]"
     parser = OptionParser(usage=usage)
 
     parser.add_option("-p", "--path", dest="planDir", metavar="PLANDIR", default=None,
@@ -21,8 +20,8 @@ def main():
                           help="Output filename base string.")
     parser.add_option("-f", "--format", dest="outFormat", metavar="FORMAT", default=None,
                           help="Output file format (gv,png,svg,pdf)")
-#    parser.add_option("-m", "--mergePDDL", dest="pddlDomain", metavar="DOMAIN", default=None,
-#                      help="Path to PDDL domain file.")
+    parser.add_option("-m", "--mergePDDL", dest="pddlDomain", metavar="DOMAIN", default=None,
+                      help="Path to PDDL domain file.")
 
     (options, args) = parser.parse_args()
 
@@ -30,7 +29,7 @@ def main():
     filterStr = options.filterStr
     outFileName = options.outFileName
     outFormat = options.outFormat
-#    pddlDomain = options.pddlDomain
+    pddlDomain = options.pddlDomain
 
     if planDir == None:
         print('Missing path to plans (option -p)')
@@ -46,7 +45,7 @@ def main():
     diagram = True
 
     # do we render PDDL file?
-#    pddlOut = True
+    pddlOut = True
 
     if outFileName == None:
         print('Output file not specified. Use -o "NAME"')
@@ -73,15 +72,15 @@ def main():
     else:
         print("Option -f missing - FSA diagram not rendered.")
 
-#    if pddlDomain == None:
-#        print('No domain specified. Use -m "PATH_TO_DOMAIN_FILE"')
-#        pddlOut = False
+    if pddlDomain == None:
+        print('No domain specified. Use -m "PATH_TO_DOMAIN_FILE"')
+        pddlOut = False
 
-#    if pddlOut:
+    if pddlOut:
         # output PDDL file - merging FSA to specified domain
-#        pddlText = A.merge2PDDLdomain(pddlDomain,outFileName)
-#        with open("{}.pddl".format(outFileName),"w",encoding="utf-8") as pddlOutFile:
-#            print(pddlText,file=pddlOutFile)
+        pddlText = A.merge2PDDLdomain(pddlDomain,outFileName)
+        with open("{}.pddl".format(outFileName),"w",encoding="utf-8") as pddlOutFile:
+            print(pddlText,file=pddlOutFile)
 
 if __name__ == "__main__":
     main()
