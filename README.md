@@ -8,9 +8,9 @@ Following modules should be installed and available in your python environment:
 - `ordered-set`
 
 1. Clone the code with: ```git clone https://github.com/fairf4x/dcklearn.git```
-2. git checkout main
+2. ```git checkout main```
 
-The main program may be tested by running:
+Basic help should be displayed when running:
     ```python learnFSA.py -h```
 
 ## Usage
@@ -19,20 +19,20 @@ In order to use the program you need a directory with plans to learn from.
 Let us have the directory at `PLANDIRPATH`. In this directory program expects to find plans.
 Plans are text files with one action per line in the following format:
 
-(action_name arg1 arg2 arg3 ... )
+   (action_name arg1 arg2 arg3 ... )
 
 These actions are used for learning a FSA.
 
 We can render resulting FSA diagram using `FILENAME` and `FORMAT` (only `png`,`svg` and `pdf` are supported).
 Textual graphviz format for further machine processing is `gv`):
 
-    ```python learnFSA.py -p PLANDIRPATH -o FILENAME -f FORMAT```
+   python learnFSA.py -p PLANDIRPATH -o FILENAME -f FORMAT
 
-Resulting FSA diagram should be stored as `dck_test.cairo.cairo.png` in current directory.
+Resulting FSA diagram should be stored at path given by the `FILENAME` argument.
 
 If we want to merge learned FSA with existing PDDL domain, we need to specify both `DOMAINPATH` and resulting domain `FILENAME`:
 
-    python learnFSA.py -p PLANDIRPATH -o FILENAME -m DOMAINPATH
+   python learnFSA.py -p PLANDIRPATH -o FILENAME -m DOMAINPATH
 
 
 ## Implementation details
@@ -41,34 +41,38 @@ If we want to merge learned FSA with existing PDDL domain, we need to specify bo
 
 The algorithm works recursively with sets of plans in order to build a special tree structure which is then used to build the resulting regular expression.
 
-Input always consists of a finite set of plans. All these plans are then splitted into three plan sets (called Head, Middle and Tail). Every split decision is represented as a node in a tree structure. The decision is made by choosing a *split action*.
+Input always consists of a finite set of plans. All these plans are then splitted into three plan sets (called `Head`, `Middle` and `Tail`). Every split decision is represented as a node in a tree structure. The decision is made by choosing a *split action*.
 For example if the plan is (shortened for readability - each letter represents one action):
 
-p = BCABDABCABDC
+    p = BCABDABCABDC
 
-and we choose split action A, we get:
+and we choose split action **A**, we get:
 
-Head(p) = {BC}
-Middle(p) = {BD,BC}
-Tail(p) = {BDC}
+    Head(p) = {BC}
+    Middle(p) = {BD,BC}
+    Tail(p) = {BDC}
 
-Each set thus contain fragments of the original plan without selected split action. If we split all plans from the input set (all plans in the input directory) in similar manner we can get lists of all Head, Middle and Tail plans that are used as an input for subsequent recursive steps.
+Each set thus contain fragments of the original plan without selected *split action*. If we split all plans from the input set (all plans in the input directory) in similar manner we can get lists of all `Head`, `Middle` and `Tail` plans that are used as an input for subsequent recursive steps.
 
 There are following special cases for tree nodes:
 
 1. Non-trivial node represents split of all the plans using an action `a` into three sets of plans.
-After spliting all plans from the input set of plans P (|P| = N), the result of the split with the split action `a` is:
-HeadList(a) = Union{ Head(P1),..., Head(PN) }
-MiddleList(a) = Union{ Middle(P1),..., Middle(PN) }
-TailList(a) = Union{ Tail(P1),..., Tail(PN) }
+After spliting all plans from the input set of plans *P* (|P| = N), the result of the split with the split action `a` is:
 
-Every such node has at most three children (one for each XList(a)). The node is called non-trivial iff at least one of them can be recursively processed further yielding more complex structures.
+    HeadList(a) = Union{ Head(P1),..., Head(PN) }
+    MiddleList(a) = Union{ Middle(P1),..., Middle(PN) }
+    TailList(a) = Union{ Tail(P1),..., Tail(PN) }
 
-2. Trivial node is a node where all siblings HeadList(a), MiddleList(a), TailList(a) are just sets of actions.
+Every such node has at most three children (one for each 'X'List(a)). The node is called non-trivial iff at least one of them can be recursively processed further yielding more complex structures.
+
+2. Trivial node is a node where all siblings `HeadList(a)`, `MiddleList(a)`, `TailList(a)` are just sets of actions.
+   A sibling node of this kind is generated when there is no *split action* selected.
+   The set of actions used is the set used in the selection process.
    This kind of node has no siblings for further processing.
-   It records only information about short subplan consisting from the actions from its sibling sets and its own split action.
+   It records only information about short subplan consisting of the actions from its sibling sets and its own split action.
 
 3. Leaf node is trivial node where all siblings are empty sets.
+   A sibling node of this kind is generated when the set used for action selection is empty.
    This kind of node store only information about position of its split action in the tree.
 
 ### Split action selection ###

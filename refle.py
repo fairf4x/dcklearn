@@ -199,7 +199,7 @@ def makeRE(plans,domainSignature,trace,level):
     elif (not leftEnd) and (not rightEnd):
         actionSet = set([a for p in plans for (a,args) in p[1:-1] if a != None])
 
-    # if there are no actions we return
+    # returning leaf node
     if len(actionSet) == 0:
         pattern = initializePattern(actionSet,plans,domainSignature,trace,level)
         return (actionSet,pattern)
@@ -253,11 +253,12 @@ def makeRE(plans,domainSignature,trace,level):
     print('lvl {}: {}'.format(level,action))
 
     # no action was chosen (e.g. no common action in all plans - see selectAction)
+    # returning trivial node
     if action == None:
         pattern = initializePattern(actionSet,plans,domainSignature,trace,level)
         return (actionSet,pattern)
 
-    # if changing code above check dataPack for indices
+    # if changing code below check dataPack for indices
     topMinAcnt = actionSplitData[action][0]
     topMaxAcnt = actionSplitData[action][1]
 
@@ -330,6 +331,7 @@ def makeRE(plans,domainSignature,trace,level):
 
     combinedPattern = Pattern.connectPatterns(patterns,domainSignature)
 
+    # returning non-trivial node
     return (res,combinedPattern)
 
 def wrapPlans(plans,action):
