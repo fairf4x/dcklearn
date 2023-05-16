@@ -130,6 +130,6 @@ Four kinds of items can be found on the stack:
 
 ### Merging learned FSA to PDDL
 
-Merging to PDDL depends on external module ```pyddl``` (reading and writing PDDL files).
+Merging to PDDL depends on external module [```pyddl```](https://gitlab.mff.cuni.cz/vodrj5am/pyddl.git) (reading and writing PDDL files).
 Original domain PDDL file is needed. The file is read and the domain is cloned.
 Then the clone actions are updated according to FSA transitions.
