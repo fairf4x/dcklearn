@@ -243,15 +243,22 @@ class FSA(object):
 
     @staticmethod
     def handleSet(sym,stack,status):
+        transitionLabel = None
+        if status['lastState'] == None:
+            originState = 0 # initialize state counter
+        else:
+            originState = status['lastState']
+        
         for elem in sym:
-            if status['lastState'] == None:
-                originState = 0 # initialize state counter
+            if transitionLabel == None:
+                transitionLabel = '' + str(elem)
             else:
-                originState = status['lastState']
-            destState = originState
-            trans = (originState,(elem,None),destState)
-            status['lastState'] = destState
-            status['FSA'].addTransition(trans)
+                transitionLabel = transitionLabel + ',' + str(elem)
+        
+        destState = originState
+        trans = (originState,(transitionLabel,None),destState)
+        status['lastState'] = destState
+        status['FSA'].addTransition(trans)
 
     @property
     def alphabet(self):
@@ -522,7 +529,9 @@ class FSA(object):
             origLabel = labelMap[orig]
             destLabel = labelMap[dest]
             (aName,args) = act
-            if (args == None) or (len(args) == 0):
+            if (args == None):
+                edgeLabel = '({})'.format(aName)
+            elif (len(args) == 0):
                 edgeLabel = '({} -)'.format(aName)
             else:
                 argStr = ' '.join(str(a) for a in args)
@@ -630,6 +639,38 @@ class FSA(object):
 
         return newArgList
 
+    def initClonedAction(self,domain,cloneSpec):
+        '''Action to add cloned action in all cases of addAction'''
+        # 1) lambda action - newName == None
+        # 2) named action - newName != None
+
+        (actName,newName,actArgs,orig,dest) = cloneSpec
+        
+        if newName != None:
+            # named action
+            pddlA = domain.getAction(actName)
+            assert pddlA != None
+            cloneA = pyddl.pddlAction(newName,pddlA)
+        else:
+            # lambda action
+            cloneA = pyddl.pddlAction(actName)
+            
+        precondName = 's{}'.format(orig)
+        precondTerm = pyddl.pddlAtomicTerm(precondName)
+        cloneA.extendPrecond(precondTerm)
+
+        if orig != dest:
+            # add destination state
+            effectName = 's{}'.format(dest)
+            effectTerm = pyddl.pddlAtomicTerm(effectName,[])
+            cloneA.extendEffect(effectTerm)
+            
+            # negate origin state
+            cancelTerm = pyddl.pddlNegativeTerm(precondName,[])
+            cloneA.extendEffect(cancelTerm)
+
+        return cloneA
+
     def addActions(self,domain,newDomain):
         # process each FSA edge into new action
         for T in self._transitions:
@@ -638,64 +679,25 @@ class FSA(object):
 
             if aName[0] == FSA.LAMBDA_PREF:
                 # lambda actions are already named with orig-dest suffix
-                tActionName = "{}".format(aName)
+                lambdaName = "{}".format(aName)
+                # add no-op action
+                cloneA = self.initClonedAction(domain,(lambdaName,None,[],orig,dest))
+                newDomain.addAction(cloneA)
             else:
-                tActionName = "{}-{}-{}".format(aName,orig,dest)
-
-            # find matching action in the original domain
-            pddlA = domain.getAction(aName)
-            if pddlA != None:
-                cloneA = pyddl.pddlAction(tActionName,pddlA)
-                # rename arguments in pddl action clone to match FSA action arguments
-                # and state arguments
-
-                # modify argList to include state predicate parameters
-                # in case of loop actions
-                if orig == dest:
-                    # initialize newArgList
-                    arity = len(pddlA.parameters)
-                    newArgList = self.initLoopArguments(aName,arity,orig)
-
-                    FSA.renameArguments(cloneA,(aName,newArgList))
+                if argList == None:
+                    # loop actions from parenthesis
+                    parAList = aName.split(',') 
+                    for parA in parAList:
+                        # add clone with state predicate preserved
+                        newName = '{}-{}-{}'.format(parA,orig,dest)
+                        cloneA = self.initClonedAction(domain,(parA,newName,[],orig,dest))
+                        newDomain.addAction(cloneA)
                 else:
-                    FSA.renameArguments(cloneA,act)
-            else:
-                # in case of lambda action we just need empty action
-                cloneA = pyddl.pddlAction(tActionName)
+                    newName = '{}-{}-{}'.format(aName,orig,dest)
+                    # add clone with state predicate changed
+                    cloneA = self.initClonedAction(domain,(aName,newName,argList,orig,dest))
+                    newDomain.addAction(cloneA)
 
-            origState = 's{}'.format(orig)
-            origStateArgs = self._state_data[orig].args
-            destState = 's{}'.format(dest)
-            destStateArgs = self._state_data[dest].args
-
-            precondTerm = pyddl.pddlAtomicTerm(origState,origStateArgs)
-
-            if orig != dest:
-                effectTerm = pyddl.pddlAtomicTerm(destState,destStateArgs)
-                cancelTerm = pyddl.pddlNegativeTerm(origState,origStateArgs)
-                # originState holding
-                cloneA.extendPrecond(precondTerm)
-                # originState canceled and destState holding
-                cloneA.extendEffect(effectTerm)
-                cloneA.extendEffect(cancelTerm)
-            else:
-                # originState holding
-                cloneA.extendPrecond(precondTerm)
-
-            if aName[0] == FSA.LAMBDA_PREF:
-                # lambda action typed parameter list collection
-                allTermList = [precondTerm,effectTerm,cancelTerm]
-                allTermSet = set(allTermList)
-                argNameSet = set()
-                for t in allTermSet:
-                    stateID = int((t.predicateName)[1:])
-                    argsTyped = self._state_data[stateID].typedArgs
-                    for (argName,argType) in argsTyped:
-                        if not(argName in argNameSet):
-                            argNameSet.add(argName)
-                            cloneA.addParam((argName,[argType]))
-
-            newDomain.addAction(cloneA)
 
     def merge2PDDLdomain(self,pddlDomain,domainName):
         domain = pyddl.readDomain(pddlDomain)
