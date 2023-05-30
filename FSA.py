@@ -317,7 +317,7 @@ class FSA(object):
             if aName.startswith(FSA.LAMBDA_PREF):
                 continue
 
-            # skip loops (TODO: maybe we want to initialize their arguments instead?)
+            # skip loops - their arguments are not affected
             if orig == dest:
                 continue
 
@@ -326,7 +326,7 @@ class FSA(object):
             assert len(argList) == len(domainArgList)
             for (i,arg) in enumerate(argList):
                 # skip unnamed arguments (TODO: maybe we want to process them instead?)
-                if arg == '?':
+                if arg == '?': 
                     continue
                 # extend type list if the arg is already there
                 if arg in argTypeMap:
@@ -361,8 +361,7 @@ class FSA(object):
         # fill in state details for each state
         for sID in self._states:
             assert sID in self._state_data
-            state = self._state_data[sID]
-            state.updateArgData(argTypeMap,argPosMap)
+            self._state_data[sID].updateArgData(argTypeMap,argPosMap)
         # now each state should have complete information about itself:
         # ID,argumentList,argumentTypeList
         # e.g.: 3,['?x1','?x4','?x6'],['hand','container','level']
@@ -587,36 +586,15 @@ class FSA(object):
         # state predicates
         for s in self._states:
             pName = "s{}".format(s)
-            # DEBUG
-            print(pName)
-            print(self._state_data[s].typedArgs)
-            print("ENTER")
-            enterAct = self.filterTransitions(s,True)
-            for (orig,act,dest) in enterAct:
-                actionName = act[0]
-                if orig != dest and actionName[0] != FSA.LAMBDA_PREF:
-                    print(actionName)
-                    pddlAct = domain.getAction(act[0])
-                    print(pddlAct.precond)
-                    print(pddlAct.effects)
-            print("LEAVE")
-            leaveAct = self.filterTransitions(s,False)
-            for (orig,act,dest) in leaveAct:
-                actionName = act[0]
-                if orig != dest and actionName[0] != FSA.LAMBDA_PREF:
-                    print(actionName)
-                    pddlAct = domain.getAction(act[0])
-                    print(pddlAct.precond)
-                    print(pddlAct.effects)
-            # GUDEB
             newPredicate = pyddl.pddlPredicateDef(pName)
 
+            # add typed parameters to state predicate
             argsTyped = self._state_data[s].typedArgs
-
             for (arg,argT) in argsTyped:
                 newPredicate.addParam(tuple([arg,[argT]]))
 
             newDomain.addPredicate(newPredicate)
+ 
         # copy original predicates
         # these are not real copies - assuming we do not need to use new objects here
         for p in domain.getPredicateList():
@@ -656,18 +634,37 @@ class FSA(object):
             cloneA = pyddl.pddlAction(actName)
             
         precondName = 's{}'.format(orig)
-        precondTerm = pyddl.pddlAtomicTerm(precondName)
+        precArgs = self._state_data[orig].args
+        precondTerm = pyddl.pddlAtomicTerm(precondName,precArgs)
         cloneA.extendPrecond(precondTerm)
 
         if orig != dest:
             # add destination state
             effectName = 's{}'.format(dest)
-            effectTerm = pyddl.pddlAtomicTerm(effectName,[])
+            effArgs = self._state_data[dest].args
+            effectTerm = pyddl.pddlAtomicTerm(effectName,effArgs)
             cloneA.extendEffect(effectTerm)
             
             # negate origin state
-            cancelTerm = pyddl.pddlNegativeTerm(precondName,[])
+            cancArgs = self._state_data[orig].args
+            cancelTerm = pyddl.pddlNegativeTerm(precondName,cancArgs)
             cloneA.extendEffect(cancelTerm)
+        else:
+            # loop action may need to extend its arguments
+            # - based on arguments of orig
+            if len(precArgs) > 0:
+                typedArgs = self._state_data[orig].typedArgs
+                for (arg,aType) in typedArgs:
+                    cloneA.addParam((arg,[aType]))
+
+        # extend arguments of lambda action
+        # - based on arguments of orig and dest
+        if actName[0] == FSA.LAMBDA_PREF:
+            origStateArgs = self._state_data[orig].typedArgs
+            destStateArgs = self._state_data[dest].typedArgs
+            allArgs = origStateArgs + destStateArgs
+            for (arg,aType) in allArgs:
+                cloneA.addParam((arg,[aType]))
 
         return cloneA
 
@@ -696,6 +693,7 @@ class FSA(object):
                     newName = '{}-{}-{}'.format(aName,orig,dest)
                     # add clone with state predicate changed
                     cloneA = self.initClonedAction(domain,(aName,newName,argList,orig,dest))
+                    FSA.renameArguments(cloneA,act)
                     newDomain.addAction(cloneA)
 
 
@@ -703,7 +701,7 @@ class FSA(object):
         domain = pyddl.readDomain(pddlDomain)
 
        # update FSA state argument information (based on resulting FSA structure)
-       # self.updateStateArgs(domain)
+        self.updateStateArgs(domain)
 
        # create new domain to integrate changes
         newDomain = pyddl.pddlDomain()
